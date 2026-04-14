@@ -1,0 +1,43 @@
+version: "3.8"
+
+services:
+  chatterbox-tts:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.gpu
+    container_name: chatterbox-tts-finetuned
+    restart: unless-stopped
+    ports:
+      - "4123:4123"
+    volumes:
+      # Finetuned T3 weights (mapped to the filename from_local expects)
+      - /llm/chatterbox-finetuning/chatterbox_output/t3_finetuned.safetensors:/models-local/t3_cfg.safetensors:ro
+      # Pretrained components (voice encoder, vocoder, tokenizer, conditionals)
+      - /llm/chatterbox-finetuning/pretrained_models/ve.safetensors:/models-local/ve.safetensors:ro
+      - /llm/chatterbox-finetuning/pretrained_models/s3gen.safetensors:/models-local/s3gen.safetensors:ro
+      - /llm/chatterbox-finetuning/pretrained_models/tokenizer.json:/models-local/tokenizer.json:ro
+      - /llm/chatterbox-finetuning/pretrained_models/conds.pt:/models-local/conds.pt:ro
+      # HF cache for any additional downloads
+      - chatterbox-cache:/cache
+      # Voice library persistence
+      - chatterbox-voices:/voices
+      # Long text job data
+      - chatterbox-data:/data/long_text_jobs
+    environment:
+      - DEVICE=cuda
+      - USE_MULTILINGUAL_MODEL=false
+      - MODEL_LOCAL_DIR=/models-local
+      - VOICE_SAMPLE_PATH=/app/voice-sample.mp3
+      - NVIDIA_VISIBLE_DEVICES=all
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+volumes:
+  chatterbox-cache:
+  chatterbox-voices:
+  chatterbox-data:

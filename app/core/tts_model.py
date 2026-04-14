@@ -5,6 +5,7 @@ TTS model initialization and management
 import os
 import asyncio
 from enum import Enum
+from pathlib import Path
 from typing import Optional, Dict, Any
 from chatterbox.tts import ChatterboxTTS
 from chatterbox.mtl_tts import ChatterboxMultilingualTTS
@@ -86,21 +87,37 @@ async def initialize_model():
         # Initialize model with run_in_executor for non-blocking
         loop = asyncio.get_event_loop()
         
+        local_dir = Config.MODEL_LOCAL_DIR
+
         if use_multilingual:
             print(f"Loading Chatterbox Multilingual TTS model...")
-            _model = await loop.run_in_executor(
-                None, 
-                lambda: ChatterboxMultilingualTTS.from_pretrained(device=_device)
-            )
+            if local_dir:
+                print(f"Using local weights from: {local_dir}")
+                _model = await loop.run_in_executor(
+                    None,
+                    lambda: ChatterboxMultilingualTTS.from_local(Path(local_dir), device=_device)
+                )
+            else:
+                _model = await loop.run_in_executor(
+                    None,
+                    lambda: ChatterboxMultilingualTTS.from_pretrained(device=_device)
+                )
             _is_multilingual = True
             _supported_languages = SUPPORTED_LANGUAGES.copy()
             print(f"✓ Multilingual model initialized with {len(_supported_languages)} languages")
         else:
             print(f"Loading standard Chatterbox TTS model...")
-            _model = await loop.run_in_executor(
-                None, 
-                lambda: ChatterboxTTS.from_pretrained(device=_device)
-            )
+            if local_dir:
+                print(f"Using local weights from: {local_dir}")
+                _model = await loop.run_in_executor(
+                    None,
+                    lambda: ChatterboxTTS.from_local(Path(local_dir), device=_device)
+                )
+            else:
+                _model = await loop.run_in_executor(
+                    None,
+                    lambda: ChatterboxTTS.from_pretrained(device=_device)
+                )
             _is_multilingual = False
             _supported_languages = {"en": "English"}  # Standard model only supports English
             print(f"✓ Standard model initialized (English only)")
