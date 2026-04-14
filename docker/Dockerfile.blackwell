@@ -65,8 +65,8 @@ COPY main.py ./
 # Copy voice sample if it exists (optional, can be mounted)
 COPY voice-sample.mp3 ./voice-sample.mp3
 
-# Create directories for model cache and voice library (separate from source code)
-RUN mkdir -p /cache /voices /data/long_text_jobs
+# Create directories for model cache, voice library, and local weights (separate from source code)
+RUN mkdir -p /cache /voices /data/long_text_jobs /models-local
 
 # Set default environment variables (prefer CUDA)
 ENV PORT=4123
@@ -79,6 +79,7 @@ ENV MAX_TOTAL_LENGTH=3000
 ENV DEVICE=cuda
 ENV MODEL_CACHE_DIR=/cache
 ENV VOICE_LIBRARY_DIR=/voices
+ENV MODEL_LOCAL_DIR=
 ENV HOST=0.0.0.0
 
 # Long text TTS settings

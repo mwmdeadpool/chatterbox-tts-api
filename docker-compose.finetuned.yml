@@ -1,22 +1,21 @@
-version: "3.8"
-
 services:
   chatterbox-tts:
     build:
-      context: ..
-      dockerfile: docker/Dockerfile.gpu
+      context: .
+      dockerfile: docker/Dockerfile.blackwell
     container_name: chatterbox-tts-finetuned
     restart: unless-stopped
     ports:
       - "4123:4123"
     volumes:
-      # Finetuned T3 weights (mapped to the filename from_local expects)
-      - /llm/chatterbox-finetuning/chatterbox_output/t3_finetuned.safetensors:/models-local/t3_cfg.safetensors:ro
-      # Pretrained components (voice encoder, vocoder, tokenizer, conditionals)
-      - /llm/chatterbox-finetuning/pretrained_models/ve.safetensors:/models-local/ve.safetensors:ro
-      - /llm/chatterbox-finetuning/pretrained_models/s3gen.safetensors:/models-local/s3gen.safetensors:ro
+      # Finetuned T3 weights (mapped to the filename multilingual from_local expects)
+      - /llm/chatterbox-finetuning/chatterbox_output/t3_finetuned.safetensors:/models-local/t3_23lang.safetensors:ro
+      # Pretrained multilingual components (voice encoder, vocoder, tokenizer, conditionals)
+      - /llm/chatterbox-finetuning/pretrained_models_mtl/ve.pt:/models-local/ve.pt:ro
+      - /llm/chatterbox-finetuning/pretrained_models_mtl/s3gen.pt:/models-local/s3gen.pt:ro
+      # Extended tokenizer from finetuning (2454 vocab, replaces mtl_tokenizer's 2352)
       - /llm/chatterbox-finetuning/pretrained_models/tokenizer.json:/models-local/tokenizer.json:ro
-      - /llm/chatterbox-finetuning/pretrained_models/conds.pt:/models-local/conds.pt:ro
+      - /llm/chatterbox-finetuning/pretrained_models_mtl/conds.pt:/models-local/conds.pt:ro
       # HF cache for any additional downloads
       - chatterbox-cache:/cache
       # Voice library persistence
@@ -25,7 +24,7 @@ services:
       - chatterbox-data:/data/long_text_jobs
     environment:
       - DEVICE=cuda
-      - USE_MULTILINGUAL_MODEL=false
+      - USE_MULTILINGUAL_MODEL=true
       - MODEL_LOCAL_DIR=/models-local
       - VOICE_SAMPLE_PATH=/app/voice-sample.mp3
       - NVIDIA_VISIBLE_DEVICES=all

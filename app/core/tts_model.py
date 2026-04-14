@@ -4,13 +4,67 @@ TTS model initialization and management
 
 import os
 import asyncio
+import torch
 from enum import Enum
 from pathlib import Path
 from typing import Optional, Dict, Any
+from safetensors.torch import load_file as load_safetensors
 from chatterbox.tts import ChatterboxTTS
 from chatterbox.mtl_tts import ChatterboxMultilingualTTS
 from app.core.mtl import SUPPORTED_LANGUAGES
 from app.config import Config, detect_device
+
+
+def _load_multilingual_with_resize(ckpt_dir: Path, device: str) -> ChatterboxMultilingualTTS:
+    """
+    Load multilingual model from local directory, handling vocab size mismatches
+    from finetuned checkpoints (e.g., extended tokenizer with extra tokens).
+    """
+    from chatterbox.models.voice_encoder import VoiceEncoder
+    from chatterbox.models.t3 import T3
+    from chatterbox.models.t3.modules.t3_config import T3Config
+    from chatterbox.models.s3gen import S3Gen
+    from chatterbox.models.tokenizers import MTLTokenizer
+    from chatterbox.mtl_tts import Conditionals
+
+    # Load voice encoder
+    ve = VoiceEncoder()
+    ve.load_state_dict(torch.load(ckpt_dir / "ve.pt", weights_only=True))
+    ve = ve.to(device).eval()
+
+    # Load T3 state dict to check vocab size
+    t3_state = load_safetensors(ckpt_dir / "t3_23lang.safetensors")
+    ckpt_vocab_size = t3_state["text_emb.weight"].shape[0]
+
+    # Determine tokenizer — use tokenizer.json (extended) if present, else mtl_tokenizer.json
+    std_tok_path = ckpt_dir / "tokenizer.json"
+    mtl_tok_path = ckpt_dir / "mtl_tokenizer.json"
+    if std_tok_path.exists():
+        tokenizer = MTLTokenizer(str(std_tok_path))
+    elif mtl_tok_path.exists():
+        tokenizer = MTLTokenizer(str(mtl_tok_path))
+    else:
+        raise FileNotFoundError(f"No tokenizer found in {ckpt_dir}")
+
+    # Create T3 with a config matching the checkpoint's vocab size
+    hp = T3Config(text_tokens_dict_size=ckpt_vocab_size)
+    t3 = T3(hp=hp)
+    t3.load_state_dict(t3_state, strict=True)
+    t3 = t3.to(device).eval()
+
+    print(f"  T3 loaded with vocab size {ckpt_vocab_size}")
+
+    # Load S3Gen
+    s3gen = S3Gen()
+    s3gen.load_state_dict(torch.load(ckpt_dir / "s3gen.pt", weights_only=True), strict=False)
+    s3gen = s3gen.to(device).eval()
+
+    # Load conditionals if present
+    conds = None
+    if (ckpt_dir / "conds.pt").exists():
+        conds = Conditionals.load(ckpt_dir / "conds.pt").to(device)
+
+    return ChatterboxMultilingualTTS(t3, s3gen, ve, tokenizer, device, conds=conds)
 
 # Global model instance
 _model = None
@@ -95,7 +149,7 @@ async def initialize_model():
                 print(f"Using local weights from: {local_dir}")
                 _model = await loop.run_in_executor(
                     None,
-                    lambda: ChatterboxMultilingualTTS.from_local(Path(local_dir), device=_device)
+                    lambda: _load_multilingual_with_resize(Path(local_dir), _device)
                 )
             else:
                 _model = await loop.run_in_executor(
